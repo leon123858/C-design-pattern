@@ -55,3 +55,94 @@ int main() {
 
 ## Return Relevant Error
 
+只回傳和調用者相關的錯誤
+
+1. 降低開發者負擔(文件與code)
+2. 降低調用者負擔(認知與QA)
+
+可以選擇以下兩種方法來減少錯誤案例。
+
+- 整合錯誤
+- 直接中斷應用
+
+```c
+typedef enum{
+    OK,
+    Error
+}ErrorCode;
+
+ErrorCode apiCall(int parameter) {
+    assert(parameter >= 0);
+    if (parameter > 0) {
+        return Error;
+    }
+    return OK;
+}
+
+int main() {
+    ErrorCode c = apiCall(0);
+    if (c == Error) {
+        printf("error\n");
+        return 1;
+    }
+    return 0;
+}
+```
+
+## Special Return Value
+
+把特殊值當作特定資訊，用以傳達錯誤發生，是簡單情況下的最優做法。
+
+常見的回傳 `-1` `0` `1` `NULL` 都屬於此類。
+
+```c
+int apiCall(int parameter) {
+    assert(parameter >= 0);
+    if (parameter > 0) {
+        return 1;
+    }
+    return 0;
+}
+
+int main() {
+    int ret = apiCall(0);
+    if (ret) {
+        printf("error\n");
+        return 1;
+    }
+    return 0;
+}
+```
+
+## Log Errors
+
+確保事後可以輕易的找出錯誤，解決問題。
+
+不需要直接影響到調用者。
+
+不會漏掉有價值的資訊，使用者想看也可以看。
+
+```c
+#define logAssert(x) \
+if (!(x)) {            \
+printf("file:%s, line: %i\n", __FILE__, __LINE__); \
+assert(0);       \
+}
+
+int apiCall(int parameter) {
+    logAssert(parameter >= 0);
+    if (parameter > 0) {
+        return 1;
+    }
+    return 0;
+}
+
+int main() {
+    int ret = apiCall(0);
+    if (ret) {
+        printf("error\n");
+        return 1;
+    }
+    return 0;
+}
+```

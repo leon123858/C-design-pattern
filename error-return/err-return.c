@@ -5,38 +5,24 @@
 #include "stdlib.h"
 #include "assert.h"
 
-typedef enum{
-    OK,
-    NotFound,
-    NoPerm,
-    Forbid
-}ErrorCode;
+#define logAssert(x) \
+if (!(x)) {            \
+printf("file:%s, line: %i\n", __FILE__, __LINE__); \
+assert(0);       \
+}
 
-ErrorCode apiCall(int parameter) {
-    if (parameter > 2) {
-        return NoPerm;
+int apiCall(int parameter) {
+    logAssert(parameter >= 0);
+    if (parameter > 0) {
+        return 1;
     }
-    if (parameter > 1) {
-        return  NotFound;
-    }
-    if (parameter == 0) {
-        return OK;
-    }
-    return Forbid;
+    return 0;
 }
 
 int main() {
-    ErrorCode c = apiCall(0);
-    if (c == NotFound) {
-        printf("not found!\n");
-        return 1;
-    }
-    if (c == NoPerm) {
-        printf("no prem!\n");
-        return 1;
-    }
-    if (c == Forbid) {
-        printf("forbid!\n");
+    int ret = apiCall(0);
+    if (ret) {
+        printf("error\n");
         return 1;
     }
     return 0;
