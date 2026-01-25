@@ -18,4 +18,6 @@ my C design pattern sample base on ISBN:`1492097330`
 8. [files organizing](./organizing-files/README.md)
 9. [ifdef macro hell](./ifdef-hell/README.md)
 
+## ref
 
+sample code: `https://github.com/christopher-preschern/fluent-c`

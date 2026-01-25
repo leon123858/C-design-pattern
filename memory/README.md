@@ -55,10 +55,166 @@ However Stack 雖好，有其 limitation
 
 ## Dedicated Ownership
 
+如果存在
 
+- 不固定大小的大型資料結構
+- 該結構的使用不會貫穿完整 program 生命週期
+- 並且該結構的每次配置大小都會不同。
+
+此時可以考慮使用 `heap` 來動態配置記憶體，並且在遵循 Dedicated Ownership 的原則下管理記憶體釋放。
+
+這個原則的操作如下
+
+- heap 的配置者(callee)沒有 heap 的所有權
+- heap 的使用者(caller)擁有 heap 的所有權
+- 當 heap 被配置後，應該隨後由使用者用完後馬上釋放
+- 即使 heap 不能直觀的在配置後馬上使用，使用後馬上釋放
+  - 也要使用註解在配置後說明 heap 管理權被轉交到誰的手上
+  - 並且會在何處被釋放
+  - 注意，使用該 pattern 應該確保一筆 memory 只會擁有一位擁有者，避免釋放權責分配不清
+- 可能需要文件，明確的說明每一筆記憶體在各個時段的擁有權在誰手上
+
+```c
+char* functionA() {
+  char* memory = malloc(1024);
+  return memory; // heap 的配置者沒有 heap 的所有
+}
+
+char* functionB() {
+  // function B owns buf, and allocate it on the end of functionB
+  char* buf = functionA();
+  do_something_with(buf);
+  // release buf
+  free(buf);
+}
+```
 
 ## Allocation Wrapper
 
+記憶體的配置與釋放是嚴謹與複雜的，為了簡化這個過程，我們可以使用 Wrapper Interface 來包裝相關操作，讓所以記憶體的配置與釋放都經由相同入口。缺點是缺乏彈性，可能無法處理複雜情境。
+
+以下是用函數創建的範例
+
+```c
+void* checkedMalloc(size_t size) {
+  void* pointer = malloc(size);
+  assert(pointer);
+  return pointer;
+}
+
+void checkedFree(void* pointer) {
+  free(pointer);
+}
+```
+
+以下是用 macro 創建的範例
+
+```c
+#define NEW(object, type)         \
+do {                              \
+  object = malloc(sizeof(type));  \
+  assert(object);                 \
+} while(0)
+
+#define DELETE(object)    \
+do {                      \
+  free(object);           \
+  object = NULL;          \
+} while(0)
+```
+
 ## Pointer Check
 
+記憶體配置，大多數的錯誤是源於針對已經失效的指針(pointer)進行操作。
+
+所以，一個合理的做法是顯式的(explicitly)在所有指針操作前檢查，指針釋放後顯式的無效化指針。
+
+以下舉例:
+
+```c
+void functionA(char* ptr) {
+  // 明確的檢查 ptr 是否合法，不合法就不做事
+  if (ptr != NULL) {
+    do_some_thing_with(ptr);
+    free(ptr);
+    // 釋放 ptr 後，要明確讓其他函數得知該 ptr 非法
+    ptr = NULL;
+  }
+}
+```
+
 ## Memory Pool
+
+如果存在會頻繁配置與釋放的大型資料結構，期望:
+
+- 提高配置與釋放速度
+- 限制最大配置總量
+- 避免記憶體碎片化
+
+並且可以接受
+
+- 在特定的最小單位下配置記憶體
+
+那就可以使用 memory pool 作為記憶體操作解決方案
+
+常見的設計是:
+
+- 直接在 static 中宣告一個固定大小的大型空間
+- 該大型空間切分成 N 個固定大小的 Unit
+- function 可以透過 memoryPool.alloc 取得 Unit 的指標
+- function 可以直接透過 Unit 的指標來操作記憶體
+- function 用完記憶體後，可以透過 memoryPool.free 來交還 unit 的指標
+
+此外 mem pool 還可以添加許多功能，例如筆者遇過最強的 mem pool 還具備以下功能
+
+- 配置多個 unit 的連續記憶體，且邏輯指標連續，但物理空間不連續。
+- 提供各式各樣 unit 使用者的 meta data 作為額外管理機制(讀取、寫入、搜索......)。
+- 提供 event trigger 機制，thread 可以監聽某個 unit 遇到的事件。
+- 配置與釋放提供順序性保證，以作為分布式鎖。(buff addr 4 的 function 先於 buffer addr 5 的 function)
+- 各個使用目標可以設定 quota、upper limit、lower limit，所以相同目標的 buffer 使用數量可以被控管。(在申請 buffer unit 時要設定申請目的)
+- ......許許多多
+
+總之，memory pool 是實用且複雜的設計架構，能夠依據實際業務做獨特的優化
+
+note: 以下為最簡單的實作
+
+```c
+#define ELEMENT_SIZE 255
+#define MAX_ELEMENTS 10
+
+typedef struct
+{
+  bool occupied;
+  char memory[ELEMENT_SIZE];
+}PoolElement;
+
+static PoolElement memory_pool[MAX_ELEMENTS];
+
+void* poolTake(size_t size)
+{
+  if(size <= ELEMENT_SIZE)
+  {
+    for(int i=0; i<MAX_ELEMENTS; i++)
+    {
+      if(memory_pool[i].occupied == false)
+      {
+        memory_pool[i].occupied = true;
+        return &(memory_pool[i].memory);
+      }
+    }
+  }
+  return NULL;
+}
+
+void poolRelease(void* pointer)
+{
+  for(int i=0; i<MAX_ELEMENTS; i++)
+  {
+    if(&(memory_pool[i].memory) == pointer)
+    {
+      memory_pool[i].occupied = false;
+      return;
+    }
+  }
+}
+```
