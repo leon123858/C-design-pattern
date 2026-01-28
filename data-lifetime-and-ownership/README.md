@@ -121,6 +121,7 @@ destroy_instance(ptr);
 - 每個 function 都可以透過識別 ID 取得該狀態的 shared ownership
 - 亦即，多個 function 可以透過 ID 來操作同一組狀態
 - 需要注意相應產生的 race condition
+- 狀態的管理中心要 init / cleanup 各種資源
 
 ```c
 // header
