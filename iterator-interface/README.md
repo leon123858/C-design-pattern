@@ -4,6 +4,8 @@
 
 當提供了一個陣列要給 caller 調用，但是希望隱藏陣列 item 的實作細節，可以使用 index access。
 
+該方法最大的好處是可以隨機存取各個 index，不用按照順序。
+
 caller 透過類似 getItemByIndex 的函數取得 item 的 Handle，接著調用 callee 提供的方法操作 Handle 即可。
 
 但當多個 caller 同時呼叫，會發生 race condition，這方面確實有所限制。
@@ -169,6 +171,8 @@ destroyIterator(iterator);
 可以直接注入 callback function，讓 callee 在確保順序下完整操作每一個元素。
 
 重要的概念是 callback 執行時，要確保不會因為動態更新陣列而有 race condition，最後出現問題。
+
+note: 可以在 callback 執行過程直接 lock 所有對資料結構的操作，藉此避免 race condition。
 
 ```C
 // API
